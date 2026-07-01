@@ -11,10 +11,13 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Servir archivos estáticos desde public/
 app.use(express.static(path.join(__dirname, 'public')));
 
+// Usar las rutas de lotería
 app.use('/', lotoRoutes);
 
+// Manejo de 404
 app.use((req, res) => {
   res.status(404).json({ error: 'Recurso no encontrado' });
 });

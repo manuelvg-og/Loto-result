@@ -1,74 +1,114 @@
-let cargandoSorteosActivo = false;
+let cargandoActivo = false;
 
 document.addEventListener("DOMContentLoaded", () => {
   cargarSorteos();
+  setInterval(cargarSorteos, 5 * 60 * 1000);
 });
 
 async function cargarSorteos() {
-  if (cargandoSorteosActivo) return;
-  cargandoSorteosActivo = true;
-
-  const gridContainer = document.getElementById("sorteos-grid");
+  if (cargandoActivo) return;
+  cargandoActivo = true;
+  const grid = document.getElementById("sorteos-grid");
 
   try {
-    const respuesta = await fetch("/api/resultados");
+    const res = await fetch("/api/resultados");
+    if (!res.ok) throw new Error("Error de red");
     
-    if (!respuesta.ok) {
-      throw new Error("Error en la respuesta de la red");
-    }
+    const data = await res.json();
+    grid.innerHTML = "";
 
-    const data = await respuesta.json();
-    gridContainer.innerHTML = ""; 
+    // Info bar - ocupa todo el ancho
+    const infoBar = document.createElement("div");
+    infoBar.className = "badge";
+    infoBar.style.cssText = "background:#f1f5f9; padding:0.75rem 1rem; width:100%; text-align:center; font-size:0.85rem; border:1px solid #e2e8f0; border-radius:8px;";
+    infoBar.innerHTML = `🕐 Actualizado: ${data.horaActual} | <strong>${data.totalLoterias}</strong> sorteos disponibles`;
+    grid.appendChild(infoBar);
 
-    if (data.origen === "base_datos") {
-      const alertaHtml = document.createElement("div");
-      alertaHtml.style.cssText = "background-color: #fffae6; border: 1px solid #ffe58f; color: #d46b08; padding: 1rem; border-radius: 6px; text-align: center; margin-bottom: 1rem; font-weight: 500; font-size: 0.9rem;";
-      alertaHtml.innerHTML = "⚠️ Los servidores oficiales de lotería están experimentando retrasos de red. Mostrando historial de sorteos guardados.";
-      gridContainer.appendChild(alertaHtml);
-    }
+    const sorteosFiltrados = filtrarSorteos(data.sorteos);
 
-    data.sorteos.forEach(sorteo => {
-      const tarjeta = document.createElement("div");
-      tarjeta.className = "lottery-card";
-
-      // Mapeamos las esferas inyectando subtítulos para indicar cuál es 1ra, 2da y 3ra
-      let esferasHTML = "";
-      const etiquetasPremios = ["1ra", "2da", "3ra"];
-      
-      sorteo.numeros.forEach((numero, index) => {
-        const etiqueta = etiquetasPremios[index] || `${index + 1}°`;
-        esferasHTML += `
-          <div style="display: flex; flex-direction: column; align-items: center; gap: 4px;">
-            <div class="lottery-ball">${numero}</div>
-            <span style="font-size: 11px; color: #666; font-weight: 600;">${etiqueta}</span>
-          </div>
-        `;
-      });
-
-      tarjeta.innerHTML = `
-        <div class="card-header" style="flex-direction: column; align-items: flex-start; gap: 4px;">
-            <span style="font-size: 11px; font-weight: 700; color: #e02424; text-transform: uppercase; letter-spacing: 0.5px;">${sorteo.tipo}</span>
-            <div style="display: flex; justify-content: space-between; width: 100%; align-items: center;">
-              <h2 style="font-size: 1.3rem;">${sorteo.nombre}</h2>
-              <span class="date-badge">${sorteo.fecha}</span>
-            </div>
-        </div>
-        <div class="balls-container" style="gap: 1.5rem; padding-top: 0.5rem;">
-            ${esferasHTML}
-        </div>
-      `;
-
-      gridContainer.appendChild(tarjeta);
+    sorteosFiltrados.forEach((sorteo, index) => {
+      const card = crearTarjeta(sorteo, index);
+      grid.appendChild(card);
     });
 
-  } catch (error) {
-    console.error("Fallo al consumir API:", error);
-    gridContainer.innerHTML = `
-      <p style="color: red; text-align: center; font-weight: bold; padding: 2rem;">
-        ❌ No se pudieron sincronizar los resultados. Por favor, refresca la página en unos minutos.
-      </p>
-    `;
+    if (sorteosFiltrados.length === 0) {
+      grid.innerHTML = `<p class="loading-text">No hay resultados disponibles por el momento.</p>`;
+    }
+  } catch (err) {
+    console.error(err);
+    grid.innerHTML = `<p class="loading-text" style="color:#ef4444;">Error al cargar resultados. Reintenta en unos minutos.</p>`;
   } finally {
-    cargandoSorteosActivo = false;
+    cargandoActivo = false;
   }
+}
+
+function filtrarSorteos(sorteos) {
+  const vistos = new Set();
+  return sorteos.filter(s => {
+    const nombreLower = s.nombre.toLowerCase();
+    
+    if (nombreLower.includes('palé') || nombreLower.includes('pale')) {
+      return false;
+    }
+    
+    const key = `${s.nombre}-${s.fecha}`;
+    if (vistos.has(key)) return false;
+    
+    vistos.add(key);
+    return true;
+  });
+}
+
+function crearTarjeta(sorteo, index) {
+  const card = document.createElement("div");
+  card.className = "lottery-card";
+  card.style.animationDelay = `${index * 0.05}s`;
+
+  const esHoy = sorteo.esHoy;
+  const hora = sorteo.hora || '8:00 PM';
+  const colores = obtenerColoresLoteria(sorteo.nombre);
+  
+  const cantidadNumeros = sorteo.cantidadNumeros || 3;
+  const numeros = sorteo.numeros.slice(0, cantidadNumeros);
+
+  card.innerHTML = `
+    <div class="card-top">
+      <h2 class="lottery-name">${sorteo.nombre}</h2>
+      <div class="meta-badges">
+        <span class="badge time">🕒 ${hora}</span>
+        ${esHoy ? '<span class="badge today">HOY</span>' : ''}
+        <span class="badge">${sorteo.fecha}</span>
+      </div>
+    </div>
+    <div class="numbers-row">
+      ${numeros.map((num, i) => `
+        <div class="number-wrapper">
+          <div class="number-ball" style="background:${colores.ball}">${num.padStart(2, '0')}</div>
+          <span class="number-label">${obtenerLabelNumero(i, cantidadNumeros)}</span>
+        </div>
+      `).join('')}
+    </div>
+  `;
+  return card;
+}
+
+function obtenerLabelNumero(index, total) {
+  const labels = {
+    1: ['1ro'],
+    2: ['1ro', '2do'],
+    3: ['1ro', '2do', '3ro'],
+    4: ['1ro', '2do', '3ro', '4to'],
+    5: ['1ro', '2do', '3ro', '4to', '5to']
+  };
+  return labels[total]?.[index] || `${index + 1}°`;
+}
+
+function obtenerColoresLoteria(nombre) {
+  const n = nombre.toLowerCase();
+  if (n.includes('nacional') || n.includes('gana')) return { ball: 'linear-gradient(145deg, #3b82f6, #1d4ed8)' };
+  if (n.includes('leidsa')) return { ball: 'linear-gradient(145deg, #8b5cf6, #6d28d9)' };
+  if (n.includes('loteka')) return { ball: 'linear-gradient(145deg, #10b981, #047857)' };
+  if (n.includes('real')) return { ball: 'linear-gradient(145deg, #f59e0b, #b45309)' };
+  if (n.includes('lotedom')) return { ball: 'linear-gradient(145deg, #06b6d4, #0e7490)' };
+  return { ball: 'linear-gradient(145deg, #ef4444, #b91c1c)' };
 }
