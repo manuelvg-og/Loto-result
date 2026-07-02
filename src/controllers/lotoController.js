@@ -8,9 +8,8 @@ const TIEMPO_CACHE = 5 * 60 * 1000;
 
 const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 
-// ============================================
 // HORARIOS REALES DE EMISIÓN
-// ============================================
+
 const HORARIOS_EMISION = {
   'Lotería Nacional': '14:30',
   'Gana Más': '14:30',
@@ -35,9 +34,8 @@ const HORARIOS_EMISION = {
   'La Suerte Dominicana Noche': '18:00'
 };
 
-// ============================================
 // CONFIGURACIÓN DE NÚMEROS POR TIPO DE LOTERÍA
-// ============================================
+
 const CONFIG_LOTERIAS = {
   'Lotería Nacional': { numeros: 3 },
   'Gana Más': { numeros: 3 },
@@ -66,9 +64,8 @@ function obtenerConfigLoteria(nombre) {
   return CONFIG_LOTERIAS[nombre] || { numeros: 3 };
 }
 
-// ============================================
 // MAPEO DE NOMBRES ENCONTRADOS → OFICIALES
-// ============================================
+
 const MAPEO_NOMBRES = {
   'gana mas': 'Gana Más',
   'gana más': 'Gana Más',
@@ -115,17 +112,35 @@ function normalizarNombre(nombre) {
 }
 
 function obtenerFechaISO() {
-  const hoy = new Date();
-  return `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}-${String(hoy.getDate()).padStart(2, '0')}`;
+  const ahora = new Date();
+  const fechaSantoDomingo = new Date(ahora.toLocaleString("en-US", {timeZone: "America/Santo_Domingo"}));
+  
+  const año = fechaSantoDomingo.getFullYear();
+  const mes = String(fechaSantoDomingo.getMonth() + 1).padStart(2, '0');
+  const dia = String(fechaSantoDomingo.getDate()).padStart(2, '0');
+  
+  return `${año}-${mes}-${dia}`;
 }
 
-function formatearHora12(hora24) {
-  if (!hora24) return '8:00 PM';
-  const [horas, minutos] = hora24.split(':');
-  const h = parseInt(horas);
-  const ampm = h >= 12 ? 'PM' : 'AM';
-  const h12 = h % 12 || 12;
-  return `${h12}:${minutos} ${ampm}`;
+function obtenerFechaFormateada(fechaISO) {
+  if (!fechaISO) {
+    const hoy = new Date();
+    return hoy.toLocaleDateString('es-DO', { 
+      weekday: 'long', 
+      year: 'numeric', 
+      month: 'long', 
+      day: 'numeric' 
+    });
+  }
+  
+  // Agregar tiempo para evitar problemas de zona horaria
+  const fecha = new Date(fechaISO + 'T12:00:00-04:00');
+  return fecha.toLocaleDateString('es-DO', { 
+    weekday: 'long', 
+    year: 'numeric', 
+    month: 'long', 
+    day: 'numeric' 
+  });
 }
 
 function obtenerHoraActual() {
@@ -133,9 +148,9 @@ function obtenerHoraActual() {
   return `${String(ahora.getHours()).padStart(2, '0')}:${String(ahora.getMinutes()).padStart(2, '0')}`;
 }
 
-// ============================================
+
 // EXTRACCIÓN ESPECÍFICA PARA LOTERIASDOMINICANAS.COM.DO
-// ============================================
+
 function extraerDeLoteriasDominicanas($) {
   const loterias = new Map();
   
