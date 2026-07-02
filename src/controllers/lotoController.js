@@ -8,8 +8,9 @@ const TIEMPO_CACHE = 5 * 60 * 1000;
 
 const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 
+// ============================================
 // HORARIOS REALES DE EMISIÓN
-
+// ============================================
 const HORARIOS_EMISION = {
   'Lotería Nacional': '14:30',
   'Gana Más': '14:30',
@@ -34,8 +35,9 @@ const HORARIOS_EMISION = {
   'La Suerte Dominicana Noche': '18:00'
 };
 
+// ============================================
 // CONFIGURACIÓN DE NÚMEROS POR TIPO DE LOTERÍA
-
+// ============================================
 const CONFIG_LOTERIAS = {
   'Lotería Nacional': { numeros: 3 },
   'Gana Más': { numeros: 3 },
@@ -64,8 +66,9 @@ function obtenerConfigLoteria(nombre) {
   return CONFIG_LOTERIAS[nombre] || { numeros: 3 };
 }
 
+// ============================================
 // MAPEO DE NOMBRES ENCONTRADOS → OFICIALES
-
+// ============================================
 const MAPEO_NOMBRES = {
   'gana mas': 'Gana Más',
   'gana más': 'Gana Más',
@@ -111,21 +114,29 @@ function normalizarNombre(nombre) {
   return null;
 }
 
-function obtenerFechaISO() {
+// ============================================
+// FUNCIONES DE FECHA Y HORA (CORREGIDAS)
+// ============================================
+
+// Obtiene la fecha actual en zona horaria de Santo Domingo
+function obtenerFechaActualSD() {
   const ahora = new Date();
-  const fechaSantoDomingo = new Date(ahora.toLocaleString("en-US", {timeZone: "America/Santo_Domingo"}));
-  
-  const año = fechaSantoDomingo.getFullYear();
-  const mes = String(fechaSantoDomingo.getMonth() + 1).padStart(2, '0');
-  const dia = String(fechaSantoDomingo.getDate()).padStart(2, '0');
-  
+  const fechaStr = ahora.toLocaleString("en-US", { timeZone: "America/Santo_Domingo" });
+  return new Date(fechaStr);
+}
+
+function obtenerFechaISO() {
+  const fechaSD = obtenerFechaActualSD();
+  const año = fechaSD.getFullYear();
+  const mes = String(fechaSD.getMonth() + 1).padStart(2, '0');
+  const dia = String(fechaSD.getDate()).padStart(2, '0');
   return `${año}-${mes}-${dia}`;
 }
 
 function obtenerFechaFormateada(fechaISO) {
   if (!fechaISO) {
-    const hoy = new Date();
-    return hoy.toLocaleDateString('es-DO', { 
+    const fechaSD = obtenerFechaActualSD();
+    return fechaSD.toLocaleDateString('es-DO', { 
       weekday: 'long', 
       year: 'numeric', 
       month: 'long', 
@@ -133,8 +144,10 @@ function obtenerFechaFormateada(fechaISO) {
     });
   }
   
-  // Agregar tiempo para evitar problemas de zona horaria
-  const fecha = new Date(fechaISO + 'T12:00:00-04:00');
+  // Crear fecha con hora 12:00 para evitar problemas de zona horaria
+  const [año, mes, dia] = fechaISO.split('-');
+  const fecha = new Date(parseInt(año), parseInt(mes) - 1, parseInt(dia), 12, 0, 0);
+  
   return fecha.toLocaleDateString('es-DO', { 
     weekday: 'long', 
     year: 'numeric', 
@@ -144,17 +157,32 @@ function obtenerFechaFormateada(fechaISO) {
 }
 
 function obtenerHoraActual() {
-  const ahora = new Date();
-  return `${String(ahora.getHours()).padStart(2, '0')}:${String(ahora.getMinutes()).padStart(2, '0')}`;
+  const fechaSD = obtenerFechaActualSD();
+  const horas = String(fechaSD.getHours()).padStart(2, '0');
+  const minutos = String(fechaSD.getMinutes()).padStart(2, '0');
+  return `${horas}:${minutos}`;
 }
 
+// ✅ FUNCIÓN AGREGADA - Convierte hora 24h a 12h
+function formatearHora12(hora24) {
+  if (!hora24) return '8:00 PM';
+  
+  const partes = hora24.split(':');
+  const horas = parseInt(partes[0]);
+  const minutos = partes[1] || '00';
+  
+  const ampm = horas >= 12 ? 'PM' : 'AM';
+  const horas12 = horas % 12 || 12;
+  
+  return `${horas12}:${minutos} ${ampm}`;
+}
 
+// ============================================
 // EXTRACCIÓN ESPECÍFICA PARA LOTERIASDOMINICANAS.COM.DO
-
+// ============================================
 function extraerDeLoteriasDominicanas($) {
   const loterias = new Map();
   
-  // Buscar todos los elementos que contengan resultados
   const elementos = $('*').filter(function() {
     const texto = $(this).text();
     return texto.match(/\d{2}\s*1ro/) || texto.match(/\d{2}\s*2do/);
@@ -164,7 +192,6 @@ function extraerDeLoteriasDominicanas($) {
     const $el = $(el);
     const textoCompleto = $el.text();
     
-    // Buscar patrón: NOMBRE + números con 1ro, 2do, 3ro
     const match = textoCompleto.match(/([A-ZÁÉÍÓÚÑa-záéíóúñ\s]+?)\s+(\d{2})\s*1ro\s+(\d{2})\s*2do\s+(\d{2})\s*3ro/i);
     
     if (match) {
@@ -187,11 +214,9 @@ function extraerDeLoteriasDominicanas($) {
     }
   });
   
-  // Búsqueda alternativa: buscar números en secuencia
   if (loterias.size < 5) {
     const bodyText = $('body').text();
     
-    // Patrones específicos para cada lotería
     const patrones = [
       { nombre: 'Gana Más', regex: /Gana\s+Mas\s+.*?(\d{2})\s*1ro\s+(\d{2})\s*2do\s+(\d{2})\s*3ro/is },
       { nombre: 'Loteria Nacional', regex: /Loteria\s+Nacional\s+.*?(\d{2})\s*1ro\s+(\d{2})\s*2do\s+(\d{2})\s*3ro/is },
